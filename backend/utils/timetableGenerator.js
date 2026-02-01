@@ -165,16 +165,25 @@ export async function generateTimetableWithAI(request) {
     }
 
     // 1. Fetch all necessary data from the database
-    console.log('Fetching DB data...');
+    console.log('[v0] Fetching DB data...');
     const allCourses = await Course.find({});
     const allFaculty = await Faculty.find({});
     const allRooms = await Room.find({});
+
+    console.log(`[v0] DB Total: ${allCourses.length} courses, ${allFaculty.length} faculty, ${allRooms.length} rooms`);
+    console.log(`[v0] Filtering for department: "${department}", semester: ${semester}`);
+    
+    if (allFaculty.length > 0) {
+      console.log(`[v0] Sample faculty departments:`, allFaculty.slice(0, 3).map(f => ({ name: f.name, dept: f.department })));
+    }
 
     // Filter data for the specific request
     const relevantCourses = allCourses.filter(c =>
       (c.department || '').toLowerCase() === department.toLowerCase() &&
       Number(c.semester) === Number(semester)
     );
+
+    console.log(`[v0] Found ${relevantCourses.length} courses for ${department} semester ${semester}`);
 
     if (relevantCourses.length === 0) {
       console.warn(`No courses found for ${department}, Semester ${semester}`);
@@ -197,9 +206,18 @@ export async function generateTimetableWithAI(request) {
       return saved;
     }
 
+    // Try exact match first, then fallback to using ALL faculty if no match
     let relevantFaculty = allFaculty.filter(f => 
       (f.department || '').toLowerCase() === department.toLowerCase()
     );
+    
+    console.log(`[v0] Filtered faculty: ${relevantFaculty.length} (after department filter)`);
+    
+    // If department filter returns nothing, use ALL faculty (for flexibility)
+    if (relevantFaculty.length === 0 && allFaculty.length > 0) {
+      console.log(`[v0] No faculty matched department filter, using ALL ${allFaculty.length} faculty`);
+      relevantFaculty = allFaculty;
+    }
 
     // CREATE FALLBACK FACULTY IF NONE EXIST
     if (relevantFaculty.length === 0) {
