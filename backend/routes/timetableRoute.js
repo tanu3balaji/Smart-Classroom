@@ -4,6 +4,17 @@ import { generateTimetableWithAI} from "../utils/timetableGenerator.js";
 
 export const timetablesRouter = Router();
 
+// Generate timetable using rule-based scheduling (MUST come before /:id)
+timetablesRouter.post("/generate", async (req, res) => {
+  try {
+    const createdTimetable = await generateTimetableWithAI(req.body);
+    res.status(201).json(createdTimetable);
+  } catch (error) {
+    console.error("Error generating timetable:", error);
+    res.status(500).json({ error: "Failed to generate timetable", details: error.message });
+  }
+});
+
 // Get all timetables
 timetablesRouter.get("/", async (req, res) => {
   try {
@@ -60,17 +71,6 @@ timetablesRouter.delete("/:id", async (req, res) => {
   } catch (error) {
     console.error("Error deleting timetable:", error);
     res.status(500).json({ error: "Failed to delete timetable" });
-  }
-});
-
-// Generate timetable using rule-based scheduling
-timetablesRouter.post("/generate", async (req, res) => {
-  try {
-    const createdTimetable = await generateTimetableWithAI(req.body);
-    res.status(201).json(createdTimetable);
-  } catch (error) {
-    console.error("Error generating timetable:", error);
-    res.status(500).json({ error: "Failed to generate timetable", details: error.message });
   }
 });
 

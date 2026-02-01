@@ -142,62 +142,105 @@ export async function generateTimetableWithAI(request) {
       (f.department || '').toLowerCase() === department.toLowerCase()
     );
 
+    // Check if we have rooms and faculty
+    console.log(`Found ${relevantCourses.length} courses, ${relevantFaculty.length} faculty, ${allRooms.length} rooms`);
+    
+    if (allRooms.length === 0) {
+      console.warn('No rooms available for scheduling');
+    }
+    if (relevantFaculty.length === 0) {
+      console.warn('No faculty available for scheduling');
+    }
+
     // 2. Generate timetable using constraint-based logic
     console.log(`Generating timetable for ${relevantCourses.length} courses...`);
     const schedule = [];
-    const usedFaculty = new Map(); // Track sessions per faculty
     const courseAssignments = new Map(); // Track which faculty teaches which course
+    const usedFacultySlots = new Map(); // Track faculty time occupancy
     
-    // Assign faculty to courses first
+    // Initialize faculty slot tracking
+    for (const faculty of relevantFaculty) {
+      usedFacultySlots.set(String(faculty._id), []);
+    }
+
+    // STEP 1: Assign faculty to courses
+    console.log('STEP 1: Assigning faculty to courses...');
     for (const course of relevantCourses) {
-      const faculty = findBestFaculty(course, relevantFaculty, new Set(courseAssignments.values()));
-      if (faculty) {
-        courseAssignments.set(String(course._id), String(faculty._id));
-        console.log(`Assigned ${faculty.name} to ${course.name}`);
+      let assignedFaculty = null;
+      const courseNameLower = (course.name || '').toLowerCase();
+      
+      // Try specialization match first
+      for (const faculty of relevantFaculty) {
+        if (faculty.specialization && faculty.specialization.length > 0) {
+          const hasMatch = faculty.specialization.some(spec =>
+            courseNameLower.includes(spec.toLowerCase()) || 
+            spec.toLowerCase().includes(courseNameLower)
+          );
+          if (hasMatch && !courseAssignments.values().includes(String(faculty._id))) {
+            assignedFaculty = faculty;
+            break;
+          }
+        }
+      }
+      
+      // If no match, assign any available faculty
+      if (!assignedFaculty) {
+        for (const faculty of relevantFaculty) {
+          if (!Array.from(courseAssignments.values()).includes(String(faculty._id))) {
+            assignedFaculty = faculty;
+            break;
+          }
+        }
+      }
+      
+      // If all faculty are assigned, allow reuse
+      if (!assignedFaculty && relevantFaculty.length > 0) {
+        assignedFaculty = relevantFaculty[0];
+      }
+      
+      if (assignedFaculty) {
+        courseAssignments.set(String(course._id), String(assignedFaculty._id));
+        console.log(`[v0] Assigned "${assignedFaculty.name}" to "${course.name}"`);
+      } else {
+        console.warn(`[v0] No faculty available for course: ${course.name}`);
       }
     }
 
-    // Schedule each course's sessions
+    // STEP 2: Schedule each course's sessions
+    console.log('STEP 2: Scheduling sessions with rooms and faculty...');
     for (const course of relevantCourses) {
       const facultyId = courseAssignments.get(String(course._id));
       const faculty = relevantFaculty.find(f => String(f._id) === facultyId);
       
-      if (!faculty) {
-        console.warn(`No faculty assigned for course: ${course.name}`);
+      if (!faculty || allRooms.length === 0) {
+        console.warn(`[v0] Cannot schedule ${course.name}: faculty="${!!faculty}", rooms=${allRooms.length}`);
         continue;
       }
 
       const requiredSessions = getWeeklySessions(course);
       let sessionsScheduled = 0;
-      let relaxedConstraints = false;
 
-      // Try to schedule required sessions
-      outerLoop: for (let attempt = 0; attempt < 2; attempt++) {
+      // Try to schedule sessions across the week
+      for (let sessionNum = 0; sessionNum < requiredSessions; sessionNum++) {
+        let scheduled = false;
+        
         for (const day of DAYS) {
+          if (scheduled) break;
+          
           for (const timeSlot of TIME_SLOTS) {
-            if (sessionsScheduled >= requiredSessions) break outerLoop;
-
-            // Check availability
-            const facultyAvailable = relaxedConstraints || 
-              isFacultyAvailable(faculty, day, timeSlot.start, timeSlot.end);
+            // Check if faculty is free at this time
+            const facultyOccupied = (usedFacultySlots.get(String(faculty._id)) || [])
+              .some(slot => slot.day === day && 
+                !(slot.end <= timeSlot.start || slot.start >= timeSlot.end));
             
-            if (!facultyAvailable) continue;
+            if (facultyOccupied) continue;
 
             // Find available room
             const availableRoom = allRooms.find(room => {
-              const roomAvailable = relaxedConstraints || 
-                isRoomAvailable(room, day, timeSlot.start, timeSlot.end);
-              
-              return roomAvailable && 
-                !hasConflict(schedule, facultyId, String(room._id), day, timeSlot.start, timeSlot.end);
+              return !hasConflict(schedule, String(faculty._id), String(room._id), day, timeSlot.start, timeSlot.end);
             });
 
             if (!availableRoom) continue;
-
-            // Check for conflicts
-            if (hasConflict(schedule, facultyId, String(availableRoom._id), day, timeSlot.start, timeSlot.end)) {
-              continue;
-            }
 
             // Schedule the session
             schedule.push({
@@ -209,21 +252,26 @@ export async function generateTimetableWithAI(request) {
               endTime: timeSlot.end
             });
 
+            // Mark faculty slot as used
+            usedFacultySlots.get(String(faculty._id)).push({
+              day,
+              start: timeSlot.start,
+              end: timeSlot.end
+            });
+
             sessionsScheduled++;
-            console.log(`Scheduled ${course.name} on ${day} ${timeSlot.start}-${timeSlot.end}`);
+            console.log(`[v0] Scheduled: ${course.name} → ${faculty.name} @ ${availableRoom.name} on ${day} ${timeSlot.start}`);
+            scheduled = true;
+            break;
           }
         }
         
-        // On second attempt, relax constraints
-        if (attempt === 0 && sessionsScheduled < requiredSessions) {
-          console.log(`Relaxing constraints for ${course.name}`);
-          relaxedConstraints = true;
+        if (!scheduled) {
+          console.log(`[v0] Could not find slot for session ${sessionNum + 1}/${requiredSessions} of ${course.name}`);
         }
       }
 
-      if (sessionsScheduled < requiredSessions) {
-        console.warn(`Could only schedule ${sessionsScheduled}/${requiredSessions} sessions for ${course.name}`);
-      }
+      console.log(`[v0] Course "${course.name}": scheduled ${sessionsScheduled}/${requiredSessions} sessions`);
     }
 
     // 3. Enrich and Save the Timetable
