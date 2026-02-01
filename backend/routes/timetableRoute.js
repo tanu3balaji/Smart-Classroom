@@ -63,14 +63,14 @@ timetablesRouter.delete("/:id", async (req, res) => {
   }
 });
 
-// Generate timetable using AI
+// Generate timetable using rule-based scheduling
 timetablesRouter.post("/generate", async (req, res) => {
   try {
     const createdTimetable = await generateTimetableWithAI(req.body);
-    res.json(createdTimetable);
+    res.status(201).json(createdTimetable);
   } catch (error) {
     console.error("Error generating timetable:", error);
-    res.status(500).json({ error: "Failed to generate timetable" });
+    res.status(500).json({ error: "Failed to generate timetable", details: error.message });
   }
 });
 

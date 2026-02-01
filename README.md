@@ -1,8 +1,8 @@
 
 
-# 📚 Smart Classroom & AI Timetable Scheduler
+# 📚 Smart Classroom & Intelligent Timetable Scheduler
 
-A **MERN-based Smart Classroom Management System** that helps manage **faculties, rooms, and courses**, while automatically generating an **AI-powered timetable** that assigns the **right faculty to the right course**. It also includes a **chatbot** for students and faculty to query the timetable in real time.
+A **MERN-based Smart Classroom Management System** that helps manage **faculties, rooms, and courses**, while automatically generating a **deterministic, rule-based timetable** that assigns the **right faculty to the right course**. The system uses constraint-based scheduling to ensure conflict-free timetables with high reliability. It also includes a **chatbot** for students and faculty to query the timetable in real time.
 
 <img width="1878" height="922" alt="image" src="https://github.com/user-attachments/assets/6e84e2ac-f10f-4896-a203-c8b110168886" />
 
@@ -35,11 +35,14 @@ A **MERN-based Smart Classroom Management System** that helps manage **faculties
 
   * Create and assign courses with prerequisites and credit details.
 
-* 📅 **AI Timetable Generator**
+* 📅 **Rule-Based Timetable Generator**
 
-  * Automatically generates an optimized timetable.
+  * Automatically generates optimized timetables using deterministic constraint-solving algorithms.
+  * **No AI/Gemini API calls** - pure logic-based scheduling ensures 100% reliability.
   * Ensures no clashes between rooms, faculty, and courses.
-  * Maps correct faculty to correct courses based on expertise.
+  * Intelligently matches faculty to courses based on specialization and expertise.
+  * Respects faculty and room availability constraints.
+  * **Always returns a valid timetable** - even with relaxed constraints if needed.
 
 * 🤖 **AI Chatbot**
 
@@ -50,11 +53,11 @@ A **MERN-based Smart Classroom Management System** that helps manage **faculties
 
 ## 🛠️ Tech Stack
 
-* **Frontend**: React.js, Tailwind CSS
+* **Frontend**: React.js, Vite, Tailwind CSS, shadcn/ui
 * **Backend**: Node.js, Express.js
 * **Database**: MongoDB
-* **AI**: Timetable generation algorithm (genetic algorithm/constraint satisfaction)
-* **Chatbot**: AI-powered assistant 
+* **Scheduling Algorithm**: Constraint-based deterministic timetable generator (no external AI/API calls)
+* **Chatbot**: AI-powered assistant (optional enhancement) 
 
 ---
 
@@ -110,6 +113,55 @@ smart-classroom/
      PORT=5000
      AI_API_KEY=your_ai_key_if_any
      ```
+
+---
+
+## 🔧 How the Rule-Based Timetable Generator Works
+
+### Algorithm Overview
+
+The timetable generator uses a **deterministic constraint satisfaction approach** instead of AI/LLM calls:
+
+1. **Faculty-Course Assignment**
+   - Matches each course to a faculty member based on specialization.
+   - Prioritizes specialization matches but allows fallback assignment if needed.
+
+2. **Session Scheduling**
+   - Iterates through each course and its required weekly sessions.
+   - Assigns each session to available time slots (Mon-Fri, 6 time slots per day).
+   - Checks for conflicts:
+     - No faculty member in two places at once
+     - No room used for two classes simultaneously
+   - Respects faculty and room availability constraints
+
+3. **Conflict Resolution**
+   - **First attempt**: Strict constraint checking with availability rules.
+   - **Second attempt**: Relaxes availability constraints if first attempt insufficient.
+   - Always returns a valid timetable (even if minimal).
+
+4. **Error Handling**
+   - Returns a valid timetable object even if generation encounters errors.
+   - Never fails completely - falls back to minimal viable schedule.
+
+### Key Rules
+
+```
+✓ One faculty per time slot per class
+✓ One room per time slot
+✓ Each course scheduled for required hours/week
+✓ Respect faculty availability (if specified)
+✓ Respect room availability (if specified)
+✓ Faculty specialization matching (priority-based)
+✓ Always return valid timetable (no failures)
+```
+
+### Why This Approach?
+
+- **100% Reliability**: No dependency on external APIs or LLM quotas.
+- **Deterministic**: Same inputs always produce same outputs (no randomness).
+- **Fast**: Completes in milliseconds, not seconds.
+- **Transparent**: Clear rule-based logic, no black-box AI decisions.
+- **Cost-Effective**: Zero API costs or subscription fees.
 
 ---
 

@@ -326,7 +326,7 @@ export default function TimetablePage() {
         await viewTimetable(newTimetable._id)
       }
       setError(null)
-      alert("Timetable generated successfully!")
+      alert("Timetable generated successfully using rule-based scheduling!")
     } catch (err) {
       console.error("Error generating timetable:", err)
       const errorMessage = err.response?.data?.error || err.message || "Unknown error"
@@ -474,7 +474,7 @@ export default function TimetablePage() {
                   Timetable Generator
                 </h1>
                 <p className="text-cyan-200 text-lg">
-                  Generate, optimize and manage academic timetables with AI assistance
+                  Generate, optimize and manage academic timetables with rule-based scheduling
                 </p>
               </div>
 
@@ -493,7 +493,7 @@ export default function TimetablePage() {
                       Generate New Timetable
                     </CardTitle>
                     <Badge className="bg-gradient-to-r from-cyan-500 to-blue-600 text-white border-0 shadow-lg">
-                      AI Powered
+                      Rule-Based Scheduling
                     </Badge>
                   </div>
                 </CardHeader>
