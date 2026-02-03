@@ -288,19 +288,27 @@ export async function generateTimetableWithAI(request) {
     }
 
     // STEP 1: Assign faculty to courses
-    console.log('STEP 1: Assigning faculty to courses...');
+    console.log('[v0] STEP 1: Assigning faculty to courses...');
+    
+    // Convert to array once for efficiency
+    const assignedFacultyIds = new Set();
+    
     for (const course of relevantCourses) {
       let assignedFaculty = null;
       const courseNameLower = (course.name || '').toLowerCase();
       
       // Try specialization match first
       for (const faculty of relevantFaculty) {
+        if (assignedFacultyIds.has(String(faculty._id))) {
+          continue; // Skip already assigned faculty
+        }
+        
         if (faculty.specialization && faculty.specialization.length > 0) {
           const hasMatch = faculty.specialization.some(spec =>
             courseNameLower.includes(spec.toLowerCase()) || 
             spec.toLowerCase().includes(courseNameLower)
           );
-          if (hasMatch && !courseAssignments.values().includes(String(faculty._id))) {
+          if (hasMatch) {
             assignedFaculty = faculty;
             break;
           }
@@ -310,7 +318,7 @@ export async function generateTimetableWithAI(request) {
       // If no match, assign any available faculty
       if (!assignedFaculty) {
         for (const faculty of relevantFaculty) {
-          if (!Array.from(courseAssignments.values()).includes(String(faculty._id))) {
+          if (!assignedFacultyIds.has(String(faculty._id))) {
             assignedFaculty = faculty;
             break;
           }
@@ -324,6 +332,7 @@ export async function generateTimetableWithAI(request) {
       
       if (assignedFaculty) {
         courseAssignments.set(String(course._id), String(assignedFaculty._id));
+        assignedFacultyIds.add(String(assignedFaculty._id));
         console.log(`[v0] Assigned "${assignedFaculty.name}" to "${course.name}"`);
       } else {
         console.warn(`[v0] No faculty available for course: ${course.name}`);
