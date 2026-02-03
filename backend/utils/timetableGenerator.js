@@ -54,13 +54,26 @@ function isRoomAvailable(room, day, startTime, endTime) {
 
 /**
  * Checks if there are any conflicts with existing assignments
+ * A conflict occurs when:
+ * 1. The SAME faculty is assigned to two overlapping time slots, OR
+ * 2. The SAME room is assigned to two overlapping time slots
+ * Pass null for facultyId or roomId to skip that check
  */
 function hasConflict(schedule, facultyId, roomId, day, startTime, endTime) {
-  return schedule.some(entry => 
-    ((entry.facultyId === facultyId) || (entry.roomId === roomId)) &&
-    entry.day === day &&
-    !(entry.endTime <= startTime || entry.startTime >= endTime)
-  );
+  return schedule.some(entry => {
+    // Check if times overlap
+    const timesOverlap = entry.day === day && !(entry.endTime <= startTime || entry.startTime >= endTime);
+    
+    if (!timesOverlap) return false;
+    
+    // Conflict if same faculty at overlapping time (only check if facultyId is provided)
+    if (facultyId !== null && entry.facultyId === facultyId) return true;
+    
+    // Conflict if same room at overlapping time (only check if roomId is provided)
+    if (roomId !== null && entry.roomId === roomId) return true;
+    
+    return false;
+  });
 }
 
 /**
@@ -318,67 +331,72 @@ export async function generateTimetableWithAI(request) {
     }
 
     // STEP 2: Schedule each course's sessions
-    console.log('STEP 2: Scheduling sessions with rooms and faculty...');
+    console.log('[v0] STEP 2: Scheduling sessions with rooms and faculty...');
     for (const course of relevantCourses) {
       const facultyId = courseAssignments.get(String(course._id));
       const faculty = relevantFaculty.find(f => String(f._id) === facultyId);
       
-      if (!faculty || usedRooms.length === 0) {
-        console.warn(`[v0] Cannot schedule ${course.name}: faculty="${!!faculty}", rooms=${usedRooms.length}`);
+      if (!faculty) {
+        console.warn(`[v0] Cannot schedule ${course.name}: no faculty assigned`);
+        continue;
+      }
+
+      if (usedRooms.length === 0) {
+        console.warn(`[v0] Cannot schedule ${course.name}: no rooms available`);
         continue;
       }
 
       const requiredSessions = getWeeklySessions(course);
       let sessionsScheduled = 0;
 
-      // Try to schedule sessions across the week
+      // Try to schedule required sessions
       for (let sessionNum = 0; sessionNum < requiredSessions; sessionNum++) {
         let scheduled = false;
         
+        // Try each day
         for (const day of DAYS) {
           if (scheduled) break;
           
+          // Try each time slot
           for (const timeSlot of TIME_SLOTS) {
-            // Check if faculty is free at this time
-            const facultyOccupied = (usedFacultySlots.get(String(faculty._id)) || [])
-              .some(slot => slot.day === day && 
-                !(slot.end <= timeSlot.start || slot.start >= timeSlot.end));
-            
-            if (facultyOccupied) continue;
+            // Check for conflict
+            const hasConflictFlag = hasConflict(schedule, String(faculty._id), null, day, timeSlot.start, timeSlot.end);
+            if (hasConflictFlag) continue;
 
-            // Find available room
-            const availableRoom = usedRooms.find(room => {
-              return !hasConflict(schedule, String(faculty._id), String(room._id), day, timeSlot.start, timeSlot.end);
-            });
+            // Find a room without conflict
+            let assignedRoom = null;
+            for (const room of usedRooms) {
+              const roomHasConflict = hasConflict(schedule, null, String(room._id), day, timeSlot.start, timeSlot.end);
+              if (!roomHasConflict) {
+                assignedRoom = room;
+                break;
+              }
+            }
 
-            if (!availableRoom) continue;
+            if (!assignedRoom) {
+              // No available room at this time, try next slot
+              continue;
+            }
 
             // Schedule the session
             schedule.push({
               courseId: String(course._id),
               facultyId: String(faculty._id),
-              roomId: String(availableRoom._id),
+              roomId: String(assignedRoom._id),
               day,
               startTime: timeSlot.start,
               endTime: timeSlot.end
             });
 
-            // Mark faculty slot as used
-            usedFacultySlots.get(String(faculty._id)).push({
-              day,
-              start: timeSlot.start,
-              end: timeSlot.end
-            });
-
             sessionsScheduled++;
-            console.log(`[v0] Scheduled: ${course.name} → ${faculty.name} @ ${availableRoom.name} on ${day} ${timeSlot.start}`);
+            console.log(`[v0] Scheduled: ${course.name} → ${faculty.name} @ ${assignedRoom.name} on ${day} ${timeSlot.start}`);
             scheduled = true;
             break;
           }
         }
         
         if (!scheduled) {
-          console.log(`[v0] Could not find slot for session ${sessionNum + 1}/${requiredSessions} of ${course.name}`);
+          console.log(`[v0] Warning: Could not schedule session ${sessionNum + 1}/${requiredSessions} for ${course.name}`);
         }
       }
 
@@ -389,7 +407,7 @@ export async function generateTimetableWithAI(request) {
     const enrichedSchedule = schedule.map(entry => {
       const course = relevantCourses.find(c => String(c._id) === entry.courseId);
       const faculty = relevantFaculty.find(f => String(f._id) === entry.facultyId);
-      const room = allRooms.find(r => String(r._id) === entry.roomId);
+      const room = usedRooms.find(r => String(r._id) === entry.roomId);
       return {
         ...entry,
         courseName: course ? course.name : 'Unknown',
