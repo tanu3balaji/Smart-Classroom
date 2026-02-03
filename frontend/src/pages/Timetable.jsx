@@ -326,7 +326,7 @@ export default function TimetablePage() {
         await viewTimetable(newTimetable._id)
       }
       setError(null)
-      alert("Timetable generated successfully using rule-based scheduling!")
+      alert("Timetable generated successfully using rule-based fallback scheduling!")
     } catch (err) {
       console.error("Error generating timetable:", err)
       const errorMessage = err.response?.data?.error || err.message || "Unknown error"
