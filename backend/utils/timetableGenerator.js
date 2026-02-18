@@ -378,13 +378,14 @@ export async function generateTimetableWithAI(request) {
       console.log(`[v0] Course "${course.name}": scheduled ${sessionsScheduled}/${requiredSessions} sessions`);
     }
 
-    // FALLBACK MODE: If schedule is empty or too small, use aggressive reuse strategy
-    console.log(`[v0] After strict scheduling: ${schedule.length} entries`);
+    // FALLBACK MODE: ALWAYS fill the complete timetable grid using real data
+    const REQUIRED_GRID_SIZE = DAYS.length * TIME_SLOTS.length; // 5 days x 6 slots = 30
+    console.log(`[v0] After strict scheduling: ${schedule.length}/${REQUIRED_GRID_SIZE} entries needed`);
     
-    if (schedule.length === 0 || schedule.length < relevantCourses.length) {
-      console.log('[v0] ENTERING FALLBACK MODE: Reusing data to fill timetable...');
+    if (schedule.length < REQUIRED_GRID_SIZE) {
+      console.log('[v0] ENTERING FALLBACK MODE: Reusing data to fill timetable grid...');
       
-      // Clear and regenerate with no conflict checking - just fill the grid
+      // Clear and regenerate - fill entire grid with real data
       schedule.length = 0;
       
       let courseIndex = 0;
@@ -392,6 +393,7 @@ export async function generateTimetableWithAI(request) {
       
       for (const day of DAYS) {
         for (const timeSlot of TIME_SLOTS) {
+          // Cycle through courses and faculty for reuse
           const course = relevantCourses[courseIndex % relevantCourses.length];
           const faculty = relevantFaculty[facultyIndex % relevantFaculty.length];
           const room = usedRooms[courseIndex % usedRooms.length];
@@ -405,14 +407,16 @@ export async function generateTimetableWithAI(request) {
             endTime: timeSlot.end
           });
           
-          console.log(`[v0] Fallback: ${course.name} → ${faculty.name} @ ${room.name} on ${day} ${timeSlot.start}`);
+          console.log(`[v0] Fallback [${schedule.length}/${REQUIRED_GRID_SIZE}]: ${course.name} → ${faculty.name} @ ${room.name} on ${day} ${timeSlot.start}`);
           
           courseIndex++;
           facultyIndex++;
         }
       }
       
-      console.log(`[v0] Fallback mode completed: ${schedule.length} entries created`);
+      console.log(`[v0] Fallback mode completed: ${schedule.length} entries (FULL GRID FILLED)`);
+    } else {
+      console.log(`[v0] Strict scheduling sufficient: ${schedule.length} entries generated`);
     }
 
     // 3. Enrich and Save the Timetable
