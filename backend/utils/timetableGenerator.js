@@ -253,27 +253,6 @@ export async function generateTimetableWithAI(request) {
 
     console.log(`[v0] Using ${relevantCourses.length} courses, ${relevantFaculty.length} faculty, ${usedRooms.length} rooms`);
 
-    if (relevantCourses.length === 0) {
-      console.warn(`No courses found for ${department}, Semester ${semester}`);
-      // Return empty timetable instead of throwing error
-      const emptyTimetable = new Timetable({
-        name: `${department} - Semester ${semester} ${academicYear}`,
-        department,
-        semester: String(semester),
-        year: parseInt(academicYear),
-        schedule: [],
-        conflicts: [],
-        status: 'draft',
-        metadata: {
-          totalHours: 0,
-          utilizationRate: 0,
-          conflictCount: 0
-        }
-      });
-      const saved = await emptyTimetable.save();
-      return saved;
-    }
-
 
 
     // 2. Generate timetable using constraint-based logic
